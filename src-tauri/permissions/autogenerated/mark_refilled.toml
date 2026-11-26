@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mark-refilled"
+description = "Enables the mark_refilled command without any pre-configured scope."
+commands.allow = ["mark_refilled"]
+
+[[permission]]
+identifier = "deny-mark-refilled"
+description = "Denies the mark_refilled command without any pre-configured scope."
+commands.deny = ["mark_refilled"]

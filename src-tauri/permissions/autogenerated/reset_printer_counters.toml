@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reset-printer-counters"
+description = "Enables the reset_printer_counters command without any pre-configured scope."
+commands.allow = ["reset_printer_counters"]
+
+[[permission]]
+identifier = "deny-reset-printer-counters"
+description = "Denies the reset_printer_counters command without any pre-configured scope."
+commands.deny = ["reset_printer_counters"]

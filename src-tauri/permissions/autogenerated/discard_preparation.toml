@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-discard-preparation"
+description = "Enables the discard_preparation command without any pre-configured scope."
+commands.allow = ["discard_preparation"]
+
+[[permission]]
+identifier = "deny-discard-preparation"
+description = "Denies the discard_preparation command without any pre-configured scope."
+commands.deny = ["discard_preparation"]
