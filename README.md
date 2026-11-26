@@ -1,48 +1,77 @@
 # Soundtrack Kiosk
 
-A single-event macOS kiosk. Guests type their name, pick a song, choose a print style, and walk away with a 10x15 cm album-companion print. The song is appended to the organizer's Spotify playlist; the print is stuck into a physical album, where the guest can handwrite a memory or a wish beside the cover.
+**A party playlist your guests can hold.**
 
-Built with Tauri v2, React + TypeScript, and a Rust backend.
+[![CI](https://github.com/filo87/Soundtrack-Kiosk/actions/workflows/ci.yml/badge.svg)](https://github.com/filo87/Soundtrack-Kiosk/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/filo87/Soundtrack-Kiosk?display_name=tag)](https://github.com/filo87/Soundtrack-Kiosk/releases/latest)
+![macOS 11+](https://img.shields.io/badge/macOS-11%2B-223843)
+![Apple Silicon + Intel](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-supported-4281A4)
 
-## Features
+<p align="center">
+  <img src="docs/screenshots/search.png" alt="A guest searching for ABBA songs in Soundtrack Kiosk" width="100%" />
+</p>
 
-- Keyboard-first guest flow: name -> search -> print style -> done.
-- Spotify track search with a manual title/artist fallback when Spotify is unavailable or not authenticated.
-- Four print styles: **Portrait/Landscape x Cover/Fit**.
-  - **Cover** crops the art to fill the paper; it is full-bleed and leaves no writing margin.
-  - **Fit** shows the full art centered on a white background, leaving margins for a handwritten
-    memory or wish.
-- Cover resolution chain: iTunes 3000x3000 (strict artist/title match) -> Spotify 640 -> bundled placeholder.
-- Append-only local journal with a playlist outbox, print retry/reprint, and CSV export.
-- Duplicate protection by normalized song title + artist; the second print is still made, but the song is not added to the playlist again.
-- CUPS printing for the Canon SELPHY CP1500, with a Mock backend for development.
-- Staff status dot (salmon when auth, network, printer, refill, or pending-playlist attention is needed).
-- Admin overlay with Overview, Spotify, Printer, Event, Security and History sections.
-- Kiosk hardening: borderless fullscreen, always on top, Dock/menu bar hidden, process switching disabled, close/minimize guards.
+Soundtrack Kiosk turns a shared Spotify playlist into a physical keepsake. Guests walk up, type
+their name, search for a song, and choose how the album art prints. They leave with a 10 x 15 cm
+print for the album, with room to write a memory or a wish.
 
-## How guests use it
+Built for baby showers, first birthdays, naming days, and the people who gather around them. One
+kiosk, one shared playlist, one print per guest.
 
-1. Enter a name and pick a song; the song is added to the shared Spotify playlist.
-2. Choose orientation and whether the album art should fill the paper (**Cover**) or leave a white
-   writing margin (**Fit**).
-3. Collect the print, stick it into the physical album, and write a memory or a wish beside it.
+[Download for macOS](https://github.com/filo87/Soundtrack-Kiosk/releases/latest) ·
+[How it works](#how-it-works) ·
+[Run it locally](#quick-start)
 
-The app prints the album art and the chosen layout. The memory/wish itself is handwritten on the
-paper; it is not typed into the kiosk or stored digitally.
+## Why it works
 
-## Palette
+- **No phones, no accounts.** Guests spend a few seconds at the kiosk: name, song, print.
+- **A playlist and a print.** Every new pick joins the shared Spotify playlist; every guest still
+  leaves with album art.
+- **Made for handwriting.** **Fit** leaves a white margin for a memory or wish; **Cover** is
+  full-bleed album art.
+- **Resilient by design.** If Spotify drops, manual entry keeps the line moving and playlist adds
+  drain when the connection returns.
+- **Kind to staff.** One admin overlay covers Spotify, the printer, event copy, the PIN,
+  maintenance, and history.
+- **Local-first.** Settings, tokens, journals, and print files stay on the kiosk.
 
-The UI uses these five colors consistently:
+## Screenshots
 
-| Color        | Hex       | Use                                   |
-| ------------ | --------- | ------------------------------------- |
-| Sweet Salmon | `#FE938C` | selection, attention dot, accents     |
-| Desert Sand  | `#E6B89C` | surfaces and input fields             |
-| Wheat        | `#EAD2AC` | page background                       |
-| Cool Steel   | `#9CAFB7` | borders and preview wells             |
-| Cerulean     | `#4281A4` | selection rings, focus borders, links |
+| Welcome                                                           | Choose a print                                                         |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| ![The Soundtrack Kiosk welcome screen](docs/screenshots/name.png) | ![Four print layouts in Soundtrack Kiosk](docs/screenshots/choose.png) |
 
-Body text uses a dark blue ink (`#223843`) and muted secondary text (`#40535E`) for contrast.
+_Screenshots use demo data._
+
+## How it works
+
+1. **Say hello.** The guest enters their name and sees a welcome line written for the event.
+2. **Pick the song.** Search Spotify, or use manual title/artist entry when Spotify is unavailable.
+   The pick is added to the shared playlist.
+3. **Choose the print.** Pick portrait or landscape, then **Cover** for full-bleed art or **Fit**
+   for a white writing margin.
+4. **Make it personal.** The print drops at the printer. The guest sticks it into the album and
+   writes a memory or wish beside it.
+
+The memory itself stays handwritten. Soundtrack Kiosk prints the art; the words stay with the
+guest.
+
+## Download
+
+The latest release ships DMG and app zip builds for both architectures:
+
+- **Apple Silicon** — `Soundtrack-Kiosk-<version>-macos-arm64.dmg`
+- **Intel** — `Soundtrack-Kiosk-<version>-macos-x86_64.dmg`
+
+[Open the latest release](https://github.com/filo87/Soundtrack-Kiosk/releases/latest), download the
+matching DMG, drag **Soundtrack Kiosk** to Applications, and launch it. Requires macOS 11 or newer.
+
+The builds are unsigned and not notarized. If macOS blocks the first launch, use **System Settings
+→ Privacy & Security → Open Anyway**, or run:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Soundtrack Kiosk.app"
+```
 
 ## Requirements
 
@@ -84,6 +113,35 @@ Debug bundle:
 pnpm tauri build --debug --bundles app
 open "src-tauri/target/debug/bundle/macos/Soundtrack Kiosk.app"
 ```
+
+## Tech stack
+
+- **Desktop shell:** Tauri v2 with a hardened fullscreen kiosk window: borderless, always on top,
+  Dock/menu bar hidden, process switching disabled, and close/minimize guards.
+- **Backend:** Rust for Spotify PKCE and token refresh, iTunes artwork matching, four render
+  variants, an append-only journal, the playlist outbox, CUPS printing, and health.
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS v4, and Framer Motion.
+- **Music:** Spotify Web API with iTunes Search API for high-resolution art.
+- **Printing:** CUPS with a Canon SELPHY CP1500; a Mock backend for development.
+- **Storage:** local JSON settings, `0600` tokens, fsynced `journal.jsonl`, and a local cover/print
+  cache.
+
+The webview only talks to Rust through typed Tauri commands. Spotify tokens and all HTTP requests
+stay in the Rust process.
+
+## Palette
+
+The UI uses these five colors consistently:
+
+| Color        | Hex       | Use                                   |
+| ------------ | --------- | ------------------------------------- |
+| Sweet Salmon | `#FE938C` | selection, attention dot, accents     |
+| Desert Sand  | `#E6B89C` | surfaces and input fields             |
+| Wheat        | `#EAD2AC` | page background                       |
+| Cool Steel   | `#9CAFB7` | borders and preview wells             |
+| Cerulean     | `#4281A4` | selection rings, focus borders, links |
+
+Body text uses a dark blue ink (`#223843`) and muted secondary text (`#40535E`) for contrast.
 
 ## CI and releases
 
@@ -161,6 +219,8 @@ The printer is a Canon SELPHY CP1500 over USB through CUPS.
 - Release/default backend: `Cups`.
 - Override either with `BABY_KIOSK_PRINTER=mock` or `BABY_KIOSK_PRINTER=cups`.
 - The app submits portrait/landscape PNGs with `lp`, `media=Postcard`, `print-scaling=fill`, and `orientation-requested=3|4`.
+- Cover art resolves from iTunes 3000x3000 (strict artist/title match) -> Spotify 640 -> bundled placeholder.
+- Duplicate protection uses normalized title + artist: the second guest still gets a print, but the playlist add is skipped.
 - Media and borderless options must be confirmed on the event unit. Record the frozen values in `docs/printer-notes.md`.
 
 ## Data
@@ -255,7 +315,7 @@ src/ (React)
   kiosk/machine.ts          pure reducer
   kiosk/useKiosk.ts         effects: search debounce, prepare, commit, idle
   kiosk/screens/            Name, Search, Choose (4 layouts), Done
-  admin/                    PIN pad + lazy admin overlay
+  admin/                    shell, useAdmin, validation, ui, sections/*, PIN pad
   lib/ipc.ts                typed invoke wrappers and KioskError
   lib/types.ts              hand-written DTOs mirroring Rust
 
