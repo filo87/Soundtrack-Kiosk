@@ -34,13 +34,13 @@ paper; it is not typed into the kiosk or stored digitally.
 
 The UI uses these five colors consistently:
 
-| Color | Hex | Use |
-|---|---|---|
-| Sweet Salmon | `#FE938C` | selection, attention dot, accents |
-| Desert Sand | `#E6B89C` | surfaces and input fields |
-| Wheat | `#EAD2AC` | page background |
-| Cool Steel | `#9CAFB7` | borders and preview wells |
-| Cerulean | `#4281A4` | selection rings, focus borders, links |
+| Color        | Hex       | Use                                   |
+| ------------ | --------- | ------------------------------------- |
+| Sweet Salmon | `#FE938C` | selection, attention dot, accents     |
+| Desert Sand  | `#E6B89C` | surfaces and input fields             |
+| Wheat        | `#EAD2AC` | page background                       |
+| Cool Steel   | `#9CAFB7` | borders and preview wells             |
+| Cerulean     | `#4281A4` | selection rings, focus borders, links |
 
 Body text uses a dark blue ink (`#223843`) and muted secondary text (`#40535E`) for contrast.
 
@@ -84,6 +84,32 @@ Debug bundle:
 pnpm tauri build --debug --bundles app
 open "src-tauri/target/debug/bundle/macos/Soundtrack Kiosk.app"
 ```
+
+## CI and releases
+
+`.github/workflows/ci.yml` runs `pnpm verify` on pushes to `master` and on pull requests.
+`.github/workflows/release.yml` calls the same verification job, then builds and publishes both
+architectures.
+
+Tag a release with a semver tag starting with `v`:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+For the tag, the release workflow:
+
+1. Runs the full `pnpm verify` gate.
+2. Builds `aarch64-apple-darwin` (Apple Silicon) and `x86_64-apple-darwin` (Intel).
+3. Sets the bundle version from the tag.
+4. Publishes a GitHub Release with DMG and app zip assets for each architecture, plus
+   `SHA256SUMS`.
+
+Asset names use the tag without the `v`, for example
+`Soundtrack-Kiosk-0.1.0-macos-arm64.dmg`. The builds are unsigned and not notarized; the release
+notes include the first-launch workaround. Use the arm64 build on Apple Silicon and the x86_64
+build on Intel.
 
 ## Spotify setup
 
@@ -183,19 +209,19 @@ Old logs remain under `~/Library/Logs/com.soundtrack.babykiosk/`.
 
 ## Scripts
 
-| Command | Purpose |
-|---|---|
-| `pnpm dev` | Vite only (no Tauri IPC). |
-| `pnpm build` | Typecheck + production frontend build. |
-| `pnpm tauri dev` | Full app in development (Mock printer by default). |
-| `pnpm tauri build` | Release `.app`/`.dmg` (CUPS by default). |
-| `pnpm test` | Vitest run. |
-| `pnpm test:watch` | Vitest watch mode. |
-| `pnpm typecheck` | `tsc --noEmit`. |
-| `pnpm lint` | ESLint. |
-| `pnpm rust:test` | `cargo test`. |
-| `pnpm rust:clippy` | `cargo clippy --all-targets -- -D warnings`. |
-| `pnpm verify` | Typecheck, lint, Vitest, rustfmt check, clippy, Rust tests. |
+| Command            | Purpose                                                     |
+| ------------------ | ----------------------------------------------------------- |
+| `pnpm dev`         | Vite only (no Tauri IPC).                                   |
+| `pnpm build`       | Typecheck + production frontend build.                      |
+| `pnpm tauri dev`   | Full app in development (Mock printer by default).          |
+| `pnpm tauri build` | Release `.app`/`.dmg` (CUPS by default).                    |
+| `pnpm test`        | Vitest run.                                                 |
+| `pnpm test:watch`  | Vitest watch mode.                                          |
+| `pnpm typecheck`   | `tsc --noEmit`.                                             |
+| `pnpm lint`        | ESLint.                                                     |
+| `pnpm rust:test`   | `cargo test`.                                               |
+| `pnpm rust:clippy` | `cargo clippy --all-targets -- -D warnings`.                |
+| `pnpm verify`      | Typecheck, lint, Vitest, rustfmt check, clippy, Rust tests. |
 
 `pnpm verify` needs cargo on PATH. If `cargo` is not found, add the rustup shim:
 

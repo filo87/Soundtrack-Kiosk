@@ -1,0 +1,152 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build ${{ matrix.label }}
+    needs: verify
+    runs-on: macos-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch: arm64
+            label: Apple Silicon
+          - target: x86_64-apple-darwin
+            arch: x86_64
+            label: Intel
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Rust toolchain
+        run: |
+          rustup show
+          rustup target add "${{ matrix.target }}"
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.target }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set bundle version from tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          jq --arg version "$version" '.version = $version' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp
+          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+
+      - name: Build application
+        run: pnpm tauri build --target "${{ matrix.target }}" --bundles app
+
+      - name: Package release assets
+        env:
+          TAG: ${{ github.ref_name }}
+          ARCH: ${{ matrix.arch }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          version="${TAG#v}"
+          app="src-tauri/target/${TARGET}/release/bundle/macos/Soundtrack Kiosk.app"
+          test -d "$app"
+          mkdir -p release
+          base="release/Soundtrack-Kiosk-${version}-macos-${ARCH}"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "${base}.app.zip"
+          stage="$(mktemp -d)"
+          ditto "$app" "$stage/Soundtrack Kiosk.app"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create -volname "Soundtrack Kiosk" -fs HFS+ -srcfolder "$stage" -ov -format UDZO "${base}.dmg"
+          rm -rf "$stage"
+          ls -lh release
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: soundtrack-kiosk-${{ matrix.arch }}
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Prepare checksums and notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          cd artifacts
+          sha256sum * > SHA256SUMS
+          cd ..
+          cat > release-notes.md <<EOF
+          ## Downloads
+
+          - [Apple Silicon (arm64) DMG](${base}/Soundtrack-Kiosk-${version}-macos-arm64.dmg)
+          - [Apple Silicon (arm64) app zip](${base}/Soundtrack-Kiosk-${version}-macos-arm64.app.zip)
+          - [Intel (x86_64) DMG](${base}/Soundtrack-Kiosk-${version}-macos-x86_64.dmg)
+          - [Intel (x86_64) app zip](${base}/Soundtrack-Kiosk-${version}-macos-x86_64.app.zip)
+          - [SHA-256 checksums](${base}/SHA256SUMS)
+
+          ## Install
+
+          Open the DMG, drag **Soundtrack Kiosk** to Applications, then launch it. These builds are unsigned and not notarized. If macOS blocks the first launch, use **System Settings → Privacy & Security → Open Anyway**, or run:
+
+          \`\`\`sh
+          xattr -dr com.apple.quarantine "/Applications/Soundtrack Kiosk.app"
+          \`\`\`
+
+          Requires macOS 11 or newer. Apple Silicon Macs need the arm64 build; Intel Macs need the x86_64 build.
+          EOF
+          ls -lh artifacts
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          repo="$GITHUB_REPOSITORY"
+          if gh release view "$TAG" --repo "$repo" >/dev/null 2>&1; then
+            gh release upload "$TAG" artifacts/* --repo "$repo" --clobber
+            gh release edit "$TAG" --repo "$repo" --title "Soundtrack Kiosk ${TAG}" --notes-file release-notes.md
+          else
+            gh release create "$TAG" artifacts/* --repo "$repo" --title "Soundtrack Kiosk ${TAG}" --notes-file release-notes.md
+          fi
