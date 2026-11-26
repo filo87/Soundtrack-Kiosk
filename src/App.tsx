@@ -105,18 +105,22 @@ export default function App() {
   return (
     <div className="relative h-full w-full overflow-hidden">
       <StaffDot attention={Boolean(health?.attention)} />
-      <AnimatePresence mode="wait">
-        <motion.main
-          key={state.screen}
-          initial={{ opacity: 0, y: reduced ? 0 : 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: reduced ? 0 : -10 }}
-          transition={{ duration: reduced ? 0 : 0.2, ease: "easeOut" }}
-          className="flex h-full w-full items-center justify-center px-12"
-        >
-          {renderScreen()}
-        </motion.main>
-      </AnimatePresence>
+      <div className="kiosk-stage h-full w-full">
+        <AnimatePresence mode="wait">
+          <motion.main
+            key={state.screen}
+            initial={{ opacity: 0, y: reduced ? 0 : 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: reduced ? 0 : -10 }}
+            transition={{ duration: reduced ? 0 : 0.2, ease: "easeOut" }}
+            className="h-full w-full overflow-y-auto overscroll-contain px-12"
+          >
+            <div className="flex min-h-full w-full flex-col">
+              <div className="my-auto flex w-full justify-center">{renderScreen()}</div>
+            </div>
+          </motion.main>
+        </AnimatePresence>
+      </div>
 
       {adminStage === "pin" ? (
         <Suspense fallback={null}>
