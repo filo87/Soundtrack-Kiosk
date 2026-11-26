@@ -257,7 +257,7 @@ pub async fn commit_selection(
     let selections = state.journal.load()?;
 
     if let Some(existing) = selections.iter().find(|selection| selection.id == id) {
-        let prints_ahead = print::waiting(state.printer, config.printer.as_deref()).await;
+        let prints_ahead = print::waiting(state.print_backend(), config.printer.as_deref()).await;
         return Ok(CommitResult {
             prints_ahead,
             print_queued: existing.print_state == PrintState::Sent,
@@ -331,9 +331,10 @@ pub async fn commit_selection(
 
     remove_previews(&prepared.previews).await;
 
-    let prints_ahead = print::waiting(state.printer, config.printer.as_deref()).await;
+    let backend = state.print_backend();
+    let prints_ahead = print::waiting(backend, config.printer.as_deref()).await;
     let outcome = print::submit(
-        state.printer,
+        backend,
         config.printer.as_deref(),
         &print_file,
         orientation.as_str(),
@@ -348,7 +349,7 @@ pub async fn commit_selection(
                 .journal
                 .append_synced(&JournalLine::print_sent(&id, &staged_file, &job))
                 .await?;
-            if state.printer == print::PrinterBackend::Mock {
+            if backend == print::PrinterBackend::Mock {
                 state.mark_mock_busy();
             }
             increment_refill_counters(&state);
@@ -403,7 +404,7 @@ pub async fn admin_status(state: State<'_, AppState>) -> AppResult<AdminStatus> 
     Ok(AdminStatus {
         health,
         config,
-        print_backend: state.printer.label().to_string(),
+        print_backend: state.print_backend().label().to_string(),
         maintenance: state.is_maintenance(),
         spotify_redirect_uri: auth::callback_redirect_uri(),
         recent,
@@ -527,7 +528,7 @@ pub async fn create_spotify_playlist(
 #[tauri::command]
 pub async fn list_printers(state: State<'_, AppState>) -> AppResult<PrinterList> {
     state.require_admin()?;
-    Ok(print::list_printers(state.printer).await)
+    Ok(print::list_printers(state.print_backend()).await)
 }
 
 #[tauri::command]
@@ -538,7 +539,7 @@ pub async fn test_print(state: State<'_, AppState>) -> AppResult<PrintOutcome> {
     let preview = state.paths.previews_dir().join(format!("{id}.png"));
     render::save_bytes_as_png(&cover::placeholder().bytes, &preview)?;
     let result = print::submit(
-        state.printer,
+        state.print_backend(),
         config.printer.as_deref(),
         &preview,
         "portrait",
@@ -547,7 +548,7 @@ pub async fn test_print(state: State<'_, AppState>) -> AppResult<PrintOutcome> {
     .await;
     let _ = tokio::fs::remove_file(&preview).await;
     let outcome = result?;
-    if state.printer == print::PrinterBackend::Mock {
+    if state.print_backend() == print::PrinterBackend::Mock {
         state.mark_mock_busy();
     }
     Ok(outcome)
@@ -582,9 +583,10 @@ pub async fn reprint(state: State<'_, AppState>, id: String) -> AppResult<Commit
         _ => find_print_file(&state.paths.prints_root(), &id)
             .ok_or_else(|| AppError::not_found("No print file for this selection."))?,
     };
-    let prints_ahead = print::waiting(state.printer, config.printer.as_deref()).await;
+    let backend = state.print_backend();
+    let prints_ahead = print::waiting(backend, config.printer.as_deref()).await;
     let outcome = print::submit(
-        state.printer,
+        backend,
         config.printer.as_deref(),
         &file,
         &selection.orientation,
@@ -597,7 +599,7 @@ pub async fn reprint(state: State<'_, AppState>, id: String) -> AppResult<Commit
                 .journal
                 .append_synced(&JournalLine::print_sent(&id, &file, &job))
                 .await?;
-            if state.printer == print::PrinterBackend::Mock {
+            if backend == print::PrinterBackend::Mock {
                 state.mark_mock_busy();
             }
             increment_refill_counters(&state);

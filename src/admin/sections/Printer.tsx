@@ -97,7 +97,8 @@ export function PrinterSection({ admin }: { admin: AdminController }) {
           </div>
         </dl>
         <p className="mt-4 text-xs text-muted">
-          Debug builds use the mock backend. Release builds send jobs to CUPS with <code>lp</code>.
+          A selected queue prints through CUPS with <code>lp</code>. With no queue selected, debug
+          builds use the mock backend; release builds fall back to the CUPS default.
         </p>
       </Card>
     </div>

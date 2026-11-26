@@ -6,11 +6,15 @@ unit before the paper test matrix is signed off.
 ## Transport
 
 - USB connection, CUPS queue created by macOS.
-- Backend selection: `BABY_KIOSK_PRINTER=cups` (release builds default to CUPS).
-  Development builds default to the mock backend.
+- Backend selection: a configured queue prints through CUPS even in a debug build; with no queue
+  selected, debug builds use the mock backend and release builds use CUPS.
+- `BABY_KIOSK_PRINTER=mock|cups` overrides the configured-queue rule.
 - The CUPS queue name is stored in kiosk settings (`printer`) and selected in the admin overlay.
 - If no queue is selected, the app falls back to `lpstat -d` (CUPS default destination), so the
   admin “Default” option is functional once the printer is the system default.
+- The queue list in admin always comes from CUPS (`lpstat -e`), so development builds show the real
+  queues. The mock backend only adds a synthetic `Mock` entry when CUPS reports no queues and no
+  queue is configured.
 
 ## Options used by the app
 

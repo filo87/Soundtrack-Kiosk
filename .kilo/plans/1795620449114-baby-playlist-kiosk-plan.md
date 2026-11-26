@@ -272,6 +272,7 @@ Validate:
 ### M5 — Printing (`print.rs`, `health.rs`)
 - [ ] `PrinterBackend::Cups` submits `lp -d <printer> -o media=<frozen> -o print-scaling=fill [-o orientation-requested=<frozen>] <file>` with `tokio::process::Command` and a 15 s timeout, and parses `request id is (\S+)`.
 - [ ] `PrinterBackend::Mock` copies the file to `mock-prints/` and reports itself busy for 45 s.
+- [ ] Backend selection: a configured queue uses `Cups` even in a debug build; with no queue selected, debug builds use `Mock` and release builds use `Cups`. `BABY_KIOSK_PRINTER=mock|cups` overrides.
 - [ ] `health.rs`, every 10 s:
   - `lpstat -p <printer>` for state and reason.
   - `lpstat -o <printer>` count for `printsWaiting`.

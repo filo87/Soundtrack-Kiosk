@@ -254,13 +254,31 @@ pub fn parse_default_destination(text: &str) -> Option<String> {
 }
 
 pub async fn list_printers(backend: PrinterBackend) -> PrinterList {
-    if backend == PrinterBackend::Mock {
+    let printers = cups_queues().await;
+    let default = default_printer().await;
+    with_mock_fallback(backend, printers, default)
+}
+
+/// The queue list comes from CUPS regardless of the submission backend, so the admin can pick a
+/// real printer even in development. Only when CUPS reports nothing does the mock backend fall
+/// back to a synthetic queue.
+fn with_mock_fallback(
+    backend: PrinterBackend,
+    mut printers: Vec<String>,
+    default: Option<String>,
+) -> PrinterList {
+    if backend == PrinterBackend::Mock && printers.is_empty() {
+        printers.push("Mock".to_string());
         return PrinterList {
-            printers: vec!["Mock".to_string()],
-            default: Some("Mock".to_string()),
+            printers,
+            default: default.or_else(|| Some("Mock".to_string())),
         };
     }
-    let printers = timeout(LP_TIMEOUT, Command::new("lpstat").arg("-e").output())
+    PrinterList { printers, default }
+}
+
+async fn cups_queues() -> Vec<String> {
+    timeout(LP_TIMEOUT, Command::new("lpstat").arg("-e").output())
         .await
         .ok()
         .and_then(Result::ok)
@@ -272,15 +290,7 @@ pub async fn list_printers(backend: PrinterBackend) -> PrinterList {
                 .map(ToString::to_string)
                 .collect::<Vec<_>>()
         })
-        .unwrap_or_default();
-
-    let default = timeout(LP_TIMEOUT, Command::new("lpstat").arg("-d").output())
-        .await
-        .ok()
-        .and_then(Result::ok)
-        .and_then(|output| parse_default_destination(&String::from_utf8_lossy(&output.stdout)));
-
-    PrinterList { printers, default }
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -318,5 +328,30 @@ mod tests {
         assert_eq!(stopped.state, "stopped");
         assert_eq!(stopped.reason.as_deref(), Some("Paper out"));
         assert_eq!(parse_lpstat("").state, "error");
+    }
+
+    #[test]
+    fn mock_backend_lists_cups_queues_when_available() {
+        let list = with_mock_fallback(
+            PrinterBackend::Mock,
+            vec!["CP1500".to_string(), "Home".to_string()],
+            Some("CP1500".to_string()),
+        );
+        assert_eq!(list.printers, vec!["CP1500", "Home"]);
+        assert_eq!(list.default.as_deref(), Some("CP1500"));
+    }
+
+    #[test]
+    fn mock_backend_falls_back_to_synthetic_queue() {
+        let list = with_mock_fallback(PrinterBackend::Mock, Vec::new(), None);
+        assert_eq!(list.printers, vec!["Mock"]);
+        assert_eq!(list.default.as_deref(), Some("Mock"));
+    }
+
+    #[test]
+    fn cups_backend_keeps_an_empty_list() {
+        let list = with_mock_fallback(PrinterBackend::Cups, Vec::new(), None);
+        assert!(list.printers.is_empty());
+        assert!(list.default.is_none());
     }
 }

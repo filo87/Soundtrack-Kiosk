@@ -61,6 +61,7 @@ pub struct AppState {
     pub tokens: TokenManager,
     pub journal: Journal,
     pub printer: PrinterBackend,
+    pub printer_env_override: bool,
     pub admin: AdminSession,
     pub maintenance: AtomicBool,
     pub exit_allowed: AtomicBool,
@@ -98,6 +99,7 @@ impl AppState {
             tokens,
             journal,
             printer: default_printer(),
+            printer_env_override: printer_env_override().is_some(),
             admin: AdminSession::new(),
             maintenance: AtomicBool::new(false),
             exit_allowed: AtomicBool::new(false),
@@ -117,6 +119,26 @@ impl AppState {
             .read()
             .map(|guard| guard.clone())
             .unwrap_or_default()
+    }
+
+    /// The effective submission backend. An explicit `BABY_KIOSK_PRINTER` wins; otherwise a
+    /// configured queue routes to CUPS so the admin selection prints for real even in a debug
+    /// build, and only an unconfigured debug build falls back to the mock backend.
+    pub fn print_backend(&self) -> PrinterBackend {
+        if self.printer_env_override {
+            return self.printer;
+        }
+        match self
+            .config()
+            .printer
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+        {
+            Some(name) if name.eq_ignore_ascii_case("mock") => PrinterBackend::Mock,
+            Some(_) => PrinterBackend::Cups,
+            None => self.printer,
+        }
     }
 
     pub fn update_config(&self, mutate: impl FnOnce(&mut Config)) -> AppResult<Config> {
@@ -239,16 +261,18 @@ fn remove_preview_files(previews: &PreviewPaths) {
     }
 }
 
-fn default_printer() -> PrinterBackend {
+fn printer_env_override() -> Option<PrinterBackend> {
     match std::env::var("BABY_KIOSK_PRINTER").ok().as_deref() {
-        Some("mock") => PrinterBackend::Mock,
-        Some("cups") => PrinterBackend::Cups,
-        _ => {
-            if cfg!(debug_assertions) {
-                PrinterBackend::Mock
-            } else {
-                PrinterBackend::Cups
-            }
-        }
+        Some("mock") => Some(PrinterBackend::Mock),
+        Some("cups") => Some(PrinterBackend::Cups),
+        _ => None,
     }
+}
+
+fn default_printer() -> PrinterBackend {
+    printer_env_override().unwrap_or(if cfg!(debug_assertions) {
+        PrinterBackend::Mock
+    } else {
+        PrinterBackend::Cups
+    })
 }

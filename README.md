@@ -96,8 +96,9 @@ pnpm tauri dev
 The first Rust build takes several minutes. The window is a real kiosk window: borderless, always on top, and fullscreen.
 
 - Exit: `Ctrl + Option + Shift + K`, PIN `0000`, then **Exit kiosk** (or force-quit).
-- Debug builds use the **Mock printer** and copy simulated prints to `mock-prints/`.
-- To exercise CUPS in development: `BABY_KIOSK_PRINTER=cups pnpm tauri dev`.
+- A selected queue always prints through CUPS, even in a debug build. With no queue selected, debug
+  builds use the **Mock printer** and copy simulated prints to `mock-prints/`.
+- Force a backend with `BABY_KIOSK_PRINTER=mock` or `BABY_KIOSK_PRINTER=cups` (the override wins).
 - `pnpm dev` alone only serves the React UI in a browser; Tauri IPC calls will fail. Use it for layout work only.
 
 Production bundle:
@@ -215,9 +216,9 @@ different 4-12 digit PIN is set.
 
 The printer is a Canon SELPHY CP1500 over USB through CUPS.
 
-- Debug/default backend: `Mock` (no hardware needed).
-- Release/default backend: `Cups`.
-- Override either with `BABY_KIOSK_PRINTER=mock` or `BABY_KIOSK_PRINTER=cups`.
+- A configured queue prints through `Cups`, even in a debug build.
+- With no queue selected, the default backend is `Mock` in debug and `Cups` in release.
+- `BABY_KIOSK_PRINTER=mock` or `BABY_KIOSK_PRINTER=cups` overrides the configured-queue rule.
 - The app submits portrait/landscape PNGs with `lp`, `media=Postcard`, `print-scaling=fill`, and `orientation-requested=3|4`.
 - Cover art resolves from iTunes 3000x3000 (strict artist/title match) -> Spotify 640 -> bundled placeholder.
 - Duplicate protection uses normalized title + artist: the second guest still gets a print, but the playlist add is skipped.
@@ -273,7 +274,7 @@ Old logs remain under `~/Library/Logs/com.soundtrack.babykiosk/`.
 | ------------------ | ----------------------------------------------------------- |
 | `pnpm dev`         | Vite only (no Tauri IPC).                                   |
 | `pnpm build`       | Typecheck + production frontend build.                      |
-| `pnpm tauri dev`   | Full app in development (Mock printer by default).          |
+| `pnpm tauri dev`   | Full app in development (selected queue prints; else Mock). |
 | `pnpm tauri build` | Release `.app`/`.dmg` (CUPS by default).                    |
 | `pnpm test`        | Vitest run.                                                 |
 | `pnpm test:watch`  | Vitest watch mode.                                          |

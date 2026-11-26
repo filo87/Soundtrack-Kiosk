@@ -15,7 +15,7 @@ If a user request conflicts with the plan, implement the user's request and upda
 - macOS only. The Tauri window uses macOS presentation options and simple fullscreen.
 - pnpm 12 is the package manager. Do not introduce `package-lock.json` or npm/yarn commands.
 - Rust is pinned by `rust-toolchain.toml` (`1.100.0`, rustfmt + clippy). Use rustup, not a Homebrew Rust.
-- CUPS (`lp`, `lpstat`) is required for real printing; development defaults to Mock.
+- CUPS (`lp`, `lpstat`) is required for real printing; with no queue selected, development defaults to Mock.
 - If `cargo` is not on PATH: `export PATH="$HOME/.cargo/bin:$PATH"`.
 
 ## Commands
@@ -23,14 +23,14 @@ If a user request conflicts with the plan, implement the user's request and upda
 | Command | Use |
 |---|---|
 | `pnpm install --frozen-lockfile` | Install dependencies. |
-| `pnpm tauri dev` | Full app; debug defaults to Mock printer. |
+| `pnpm tauri dev` | Full app; a selected queue prints, no queue defaults to Mock. |
 | `pnpm dev` | Vite only; Tauri IPC is unavailable. Do not use for flow work. |
 | `pnpm test` / `pnpm test:watch` | Vitest. |
 | `pnpm typecheck` / `pnpm lint` | TypeScript and ESLint. |
 | `pnpm rust:test` / `pnpm rust:clippy` | Rust tests and lint. |
 | `pnpm verify` | Required gate: typecheck, lint, Vitest, rustfmt check, clippy `-D warnings`, Rust tests. |
 | `pnpm tauri build` | Release bundle; defaults to CUPS. |
-| `pnpm tauri build --debug --bundles app` | Debug bundle; defaults to Mock. |
+| `pnpm tauri build --debug --bundles app` | Debug bundle; a selected queue prints, no queue defaults to Mock. |
 
 Run `pnpm verify` before reporting completion. Do not claim hardware, Spotify-login, or launchd validation from automated tests.
 
@@ -135,8 +135,8 @@ All admin commands must call `state.require_admin()?` first. Admin errors with c
 
 ### Printer backend
 
-- Debug builds use `PrinterBackend::Mock`; release builds use `Cups`.
-- Override with `BABY_KIOSK_PRINTER=mock|cups`.
+- A configured queue uses `Cups` even in a debug build; with no queue selected, debug builds use `PrinterBackend::Mock` and release builds use `Cups`.
+- Override with `BABY_KIOSK_PRINTER=mock|cups` (the override wins over the configured queue).
 - CUPS submission uses `lp`; status/waiting use `lpstat`; no-shell command execution.
 - If no printer is configured, CUPS falls back to `lpstat -d`. Keep that behavior.
 - `docs/printer-notes.md` holds provisional media/borderless options; update it when hardware is tested.

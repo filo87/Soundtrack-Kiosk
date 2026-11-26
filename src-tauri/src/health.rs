@@ -32,14 +32,15 @@ pub async fn snapshot(state: &AppState) -> Health {
 
 pub async fn snapshot_with(state: &AppState, selections: &[Selection]) -> Health {
     let config = state.config();
-    let mut printer = print::status(state.printer, config.printer.as_deref()).await;
-    if state.printer == crate::print::PrinterBackend::Mock && state.mock_busy() {
+    let backend = state.print_backend();
+    let mut printer = print::status(backend, config.printer.as_deref()).await;
+    if backend == crate::print::PrinterBackend::Mock && state.mock_busy() {
         printer = PrinterHealth {
             state: "printing".to_string(),
             reason: None,
         };
     }
-    let prints_waiting = print::waiting(state.printer, config.printer.as_deref()).await;
+    let prints_waiting = print::waiting(backend, config.printer.as_deref()).await;
     let pending: Vec<_> = selections
         .iter()
         .filter(|selection| !selection.playlist_added && !selection.playlist_skipped)
