@@ -12,6 +12,8 @@ fn main() {
             "admin_status",
             "auth_start",
             "auth_logout",
+            "list_spotify_playlists",
+            "create_spotify_playlist",
             "get_public_config",
             "get_config",
             "set_config",

@@ -94,6 +94,25 @@ function install() {
         return currentStatus;
       case "list_printers":
         return { printers: ["SELPHY"], default: "SELPHY" };
+      case "list_spotify_playlists":
+        return [
+          {
+            id: "37i9dQZF1DXcBWIGoYBM5M",
+            name: "Baby Shower",
+            trackCount: 7,
+            owner: "Ada",
+          },
+          {
+            id: "4uLUuXwT2Zq9YhV0m2nO1p",
+            name: "First Birthday",
+            trackCount: 3,
+            owner: "Ada",
+          },
+        ];
+      case "create_spotify_playlist": {
+        const { name } = payload as { name: string };
+        return { id: "newPlaylistId12345", name, trackCount: 0, owner: "Ada" };
+      }
       case "set_config": {
         const { config } = payload as { config: Config };
         lastSetConfig = config;
@@ -173,8 +192,27 @@ describe("AdminOverlay", () => {
     await user.click(screen.getByRole("button", { name: "Open Spotify" }));
 
     expect(await screen.findByRole("heading", { level: 2, name: "Spotify" })).toBeInTheDocument();
-    expect(screen.getByText("Playlist id: 37i9dQZF1DXcBWIGoYBM5M")).toBeInTheDocument();
+    expect(screen.getByText(/Current playlist id: 37i9dQZF1DXcBWIGoYBM5M/)).toBeInTheDocument();
     expect(screen.getByLabelText("Redirect URI")).toHaveValue("http://127.0.0.1:43821/callback");
+  });
+
+  it("selects an existing playlist and creates a new one", async () => {
+    renderOverlay();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Spotify" }));
+    await user.click(await screen.findByRole("button", { name: /First Birthday/ }));
+
+    expect(
+      screen.getByText(/Current playlist id: 4uLUuXwT2Zq9YhV0m2nO1p/),
+    ).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("New playlist name"), "Naming Day");
+    await user.click(screen.getByRole("button", { name: "Create playlist" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Current playlist id: newPlaylistId12345/)).toBeInTheDocument(),
+    );
   });
 
   it("shows the save bar, saves the expected config, then discards later edits", async () => {

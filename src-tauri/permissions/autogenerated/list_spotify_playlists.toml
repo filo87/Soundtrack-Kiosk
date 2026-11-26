@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-spotify-playlists"
+description = "Enables the list_spotify_playlists command without any pre-configured scope."
+commands.allow = ["list_spotify_playlists"]
+
+[[permission]]
+identifier = "deny-list-spotify-playlists"
+description = "Denies the list_spotify_playlists command without any pre-configured scope."
+commands.deny = ["list_spotify_playlists"]

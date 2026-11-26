@@ -1,8 +1,14 @@
-import { Copy, LogIn, LogOut } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Copy, ListMusic, LogIn, LogOut, Plus, RefreshCw } from "lucide-react";
 import { ipc } from "../../lib/ipc";
+import type { SpotifyPlaylist } from "../../lib/types";
 import { parsePlaylistId } from "../validation";
 import type { AdminController } from "../useAdmin";
 import { Button, Card, Field, StatusChip, TextInput } from "../ui";
+
+function playlistUrl(id: string): string {
+  return `https://open.spotify.com/playlist/${id}`;
+}
 
 async function copyText(text: string): Promise<boolean> {
   const clipboard = navigator.clipboard;
@@ -32,11 +38,45 @@ async function copyText(text: string): Promise<boolean> {
   return copied;
 }
 
+type PlaylistPhase = "loading" | "ready" | "failed";
+
 export function SpotifySection({ admin }: { admin: AdminController }) {
   const { status, config } = admin;
+  const [playlists, setPlaylists] = useState<SpotifyPlaylist[] | null>(null);
+  const [phase, setPhase] = useState<PlaylistPhase>("loading");
+  const [newName, setNewName] = useState("");
+  const loadedRef = useRef(false);
+
+  const connected = status?.health.auth ?? false;
+
+  const loadPlaylists = useCallback(async () => {
+    setPhase("loading");
+    const result = await admin.run("list-playlists", () => ipc.listSpotifyPlaylists(), {
+      reload: false,
+    });
+    if (result) {
+      setPlaylists(result);
+      setPhase("ready");
+    } else {
+      setPhase("failed");
+    }
+  }, [admin]);
+
+  useEffect(() => {
+    if (!connected) {
+      loadedRef.current = false;
+      setPlaylists(null);
+      setPhase("loading");
+      return;
+    }
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    void loadPlaylists();
+  }, [connected, loadPlaylists]);
+
   if (!status || !config) return null;
-  const connected = status.health.auth;
   const playlistId = parsePlaylistId(config.playlistUrl);
+  const playlistError = admin.fieldError("playlistUrl");
 
   const copyRedirect = async () => {
     const copied = await copyText(status.spotifyRedirectUri);
@@ -44,6 +84,24 @@ export function SpotifySection({ admin }: { admin: AdminController }) {
       copied ? "success" : "error",
       copied ? "Redirect URI copied." : "Could not copy. Select the URI and copy it manually.",
     );
+  };
+
+  const selectPlaylist = (playlist: SpotifyPlaylist) => {
+    admin.setField("playlistUrl", playlistUrl(playlist.id));
+  };
+
+  const createPlaylist = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    await admin.run("create-playlist", () => ipc.createSpotifyPlaylist(name), {
+      reload: false,
+      success: (playlist) => `Created “${playlist.name}”. Save to apply.`,
+      onSuccess: (playlist) => {
+        admin.setField("playlistUrl", playlistUrl(playlist.id));
+        setNewName("");
+        void loadPlaylists();
+      },
+    });
   };
 
   return (
@@ -63,6 +121,9 @@ export function SpotifySection({ admin }: { admin: AdminController }) {
             onClick={() =>
               void admin.run("auth-start", () => ipc.authStart(), {
                 success: "Spotify login complete.",
+                onSuccess: () => {
+                  loadedRef.current = false;
+                },
               })
             }
             pending={admin.isPending("auth-start")}
@@ -88,7 +149,112 @@ export function SpotifySection({ admin }: { admin: AdminController }) {
         </p>
       </Card>
 
-      <Card title="Playlist and account">
+      <Card
+        title="Playlist"
+        description="Pick one of your Spotify playlists or create a new one for this event."
+        actions={
+          connected ? (
+            <Button
+              onClick={() => void loadPlaylists()}
+              pending={admin.isPending("list-playlists")}
+            >
+              <RefreshCw aria-hidden className="h-4 w-4" />
+              Refresh
+            </Button>
+          ) : null
+        }
+      >
+        {!connected ? (
+          <p className="text-sm text-muted">
+            Log in to Spotify to list or create playlists for this event.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {phase === "loading" ? (
+              <p className="text-sm text-muted">Loading your playlists…</p>
+            ) : phase === "failed" ? (
+              <p className="text-sm text-muted">
+                Could not load your playlists. Press Refresh to try again.
+              </p>
+            ) : playlists && playlists.length > 0 ? (
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {playlists.map((playlist) => {
+                  const selected = playlist.id === playlistId;
+                  return (
+                    <li key={playlist.id}>
+                      <button
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => selectPlaylist(playlist)}
+                        className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+                          selected
+                            ? "border-cerulean bg-cerulean/15 text-ink shadow-[inset_0_-2px_0_0_var(--color-cerulean)]"
+                            : "border-steel/60 bg-sand/25 text-muted hover:bg-wheat/60 hover:text-ink"
+                        }`}
+                      >
+                        <ListMusic aria-hidden className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-ink">
+                            {playlist.name}
+                          </span>
+                          <span className="block truncate text-xs text-muted">
+                            {playlist.trackCount}{" "}
+                            {playlist.trackCount === 1 ? "track" : "tracks"} · {playlist.owner}
+                          </span>
+                        </span>
+                        {selected ? (
+                          <span className="shrink-0 text-xs font-medium text-cerulean">
+                            Selected
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted">
+                No playlists owned by this account yet. Create one below.
+              </p>
+            )}
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="min-w-[14rem] flex-1 text-sm">
+                <span className="mb-1.5 block font-medium text-ink">New playlist name</span>
+                <TextInput
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
+                  placeholder="e.g. Ada's Baby Shower"
+                  aria-label="New playlist name"
+                  autoComplete="off"
+                  maxLength={100}
+                />
+              </label>
+              <Button
+                variant="primary"
+                disabled={!newName.trim()}
+                pending={admin.isPending("create-playlist")}
+                onClick={() => void createPlaylist()}
+              >
+                <Plus aria-hidden className="h-4 w-4" />
+                Create playlist
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <p className="mt-4 text-xs text-muted">
+          {playlistId ? `Current playlist id: ${playlistId}.` : "No playlist selected yet."}{" "}
+          Choosing or creating a playlist selects it; press Save to apply.
+        </p>
+        {playlistError ? (
+          <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-salmon/25 px-2.5 py-1.5 text-xs font-medium text-ink">
+            <span aria-hidden className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-salmon" />
+            {playlistError}
+          </p>
+        ) : null}
+      </Card>
+
+      <Card title="Account and region">
         <div className="grid gap-4 md:grid-cols-2">
           <Field
             label="Spotify client id"
@@ -103,27 +269,6 @@ export function SpotifySection({ admin }: { admin: AdminController }) {
               spellCheck={false}
               aria-label="Spotify client id"
               aria-invalid={Boolean(admin.fieldError("spotifyClientId"))}
-            />
-          </Field>
-          <Field
-            label="Playlist URL"
-            hint={
-              config.playlistUrl.trim()
-                ? playlistId
-                  ? `Playlist id: ${playlistId}`
-                  : "Paste a full Spotify playlist URL, spotify:playlist:…, or the id."
-                : "Paste a Spotify playlist URL, spotify:playlist:…, or the playlist id."
-            }
-            error={admin.fieldError("playlistUrl")}
-          >
-            <TextInput
-              value={config.playlistUrl}
-              onChange={(event) => admin.setField("playlistUrl", event.target.value)}
-              onBlur={() => admin.markTouched("playlistUrl")}
-              autoComplete="off"
-              spellCheck={false}
-              aria-label="Playlist URL"
-              aria-invalid={Boolean(admin.fieldError("playlistUrl"))}
             />
           </Field>
           <Field

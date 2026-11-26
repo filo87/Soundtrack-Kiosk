@@ -13,6 +13,7 @@ import type {
   RecentSelection,
   SearchResponse,
   SelectionInput,
+  SpotifyPlaylist,
   Track,
   Orientation,
   PrintLayout,
@@ -99,6 +100,9 @@ export const ipc = {
   adminStatus: () => call<AdminStatus>("admin_status"),
   authStart: () => call<void>("auth_start"),
   authLogout: () => call<void>("auth_logout"),
+  listSpotifyPlaylists: () => call<SpotifyPlaylist[]>("list_spotify_playlists"),
+  createSpotifyPlaylist: (name: string) =>
+    call<SpotifyPlaylist>("create_spotify_playlist", { name }),
   getPublicConfig: () => call<PublicConfig>("get_public_config"),
   getConfig: () => call<Config>("get_config"),
   setConfig: (config: Config) => call<Config>("set_config", { config }),

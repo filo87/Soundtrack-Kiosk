@@ -17,6 +17,13 @@ export interface SearchResponse {
   degraded: boolean;
 }
 
+export interface SpotifyPlaylist {
+  id: string;
+  name: string;
+  trackCount: number;
+  owner: string;
+}
+
 export type SelectionInput =
   { kind: "track"; track: Track } | { kind: "manual"; title: string; artist: string };
 

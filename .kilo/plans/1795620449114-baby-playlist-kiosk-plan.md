@@ -77,7 +77,8 @@ Global rules: input focus is always on the screen's field; the mouse can hover a
 **Admin:** `Ctrl+Option+Shift+K` → PIN overlay → admin overlay. The admin overlay contains:
 - Status: auth, network, printer state, prints waiting, outbox pending, refill counters.
 - Spotify login/relogin.
-- Playlist URL.
+- Playlist: list the account's playlists and select one, or create a new one by name. Selection
+  only fills the form; Save applies it.
 - Printer selection and test print.
 - Default orientation and copy text.
 - Last 30 selections with Reprint.
@@ -226,6 +227,7 @@ Validate: the window covers the display with no menu bar and no Dock. Cmd+Q, Cmd
   - `invalid_grant` → `NeedsLogin`.
 - [ ] `api.rs` request wrapper: one retry on 401; on 429 honour `Retry-After` (cap 10 s) or return `QUOTA`; two jittered retries on 5xx.
 - [ ] `auth_start`, `auth_logout`, playlist URL → ID parsing, and an owner check (`GET /v1/playlists/{id}` owner == `GET /v1/me`).
+- [ ] `list_spotify_playlists` (`GET /v1/me/playlists`, filtered to playlists owned by the account) and `create_spotify_playlist` (`POST /v1/me/playlists`, private). Both are admin-only. Creation and private listing use the already-requested scopes, so no scope change is needed.
 
 Validate:
 - Tests: the RFC 7636 Appendix B vector; wiremock covering rotation, no rotation, `invalid_grant`, and 10 concurrent callers causing exactly 1 refresh; callback parser cases (wrong state, `access_denied`, favicon).

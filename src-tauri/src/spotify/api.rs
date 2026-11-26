@@ -31,6 +31,18 @@ pub struct SearchResponse {
     pub degraded: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistDto {
+    pub id: String,
+    pub name: String,
+    pub track_count: u32,
+    pub owner: String,
+}
+
+const PLAYLIST_PAGE: u32 = 50;
+const PLAYLIST_SCAN_LIMIT: u32 = 200;
+
 #[derive(Clone)]
 pub struct SpotifyApi {
     http: reqwest::Client,
@@ -167,6 +179,66 @@ impl SpotifyApi {
         Ok(me == owner)
     }
 
+    /// List the playlists owned by the logged-in account, following pagination.
+    pub async fn list_playlists(&self) -> AppResult<Vec<PlaylistDto>> {
+        let me = self.me().await?;
+        let mut playlists = Vec::new();
+        let mut offset = 0u32;
+        loop {
+            let response = self
+                .request(
+                    reqwest::Method::GET,
+                    "/v1/me/playlists",
+                    &[
+                        ("limit", PLAYLIST_PAGE.to_string()),
+                        ("offset", offset.to_string()),
+                        (
+                            "fields",
+                            "items(id,name,owner(id,display_name),tracks(total))".to_string(),
+                        ),
+                    ],
+                    None,
+                )
+                .await?;
+            let body: Value = response.json().await?;
+            let items = body
+                .get("items")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            let returned = items.len();
+            playlists.extend(
+                items
+                    .iter()
+                    .filter_map(|item| parse_playlist(item, Some(me.as_str()))),
+            );
+            offset += PLAYLIST_PAGE;
+            if returned < PLAYLIST_PAGE as usize || offset >= PLAYLIST_SCAN_LIMIT {
+                break;
+            }
+        }
+        Ok(playlists)
+    }
+
+    /// Create a private playlist owned by the logged-in account.
+    pub async fn create_playlist(&self, name: &str) -> AppResult<PlaylistDto> {
+        let response = self
+            .request(
+                reqwest::Method::POST,
+                "/v1/me/playlists",
+                &[],
+                Some(json!({
+                    "name": name,
+                    "public": false,
+                    "description": "Soundtrack Kiosk",
+                })),
+            )
+            .await?;
+        let body: Value = response.json().await?;
+        parse_playlist(&body, None)
+            .ok_or_else(|| AppError::internal("Spotify did not return the new playlist."))
+    }
+
     async fn request(
         &self,
         method: reqwest::Method,
@@ -245,6 +317,40 @@ impl SpotifyApi {
 
 fn is_degradable(err: &AppError) -> bool {
     matches!(err.code(), AUTH_REQUIRED | OFFLINE | QUOTA | RATE_LIMITED)
+}
+
+/// Parse a Spotify playlist object. When `owner_filter` is set, playlists owned by anyone else are
+/// dropped, because the kiosk only accepts playlists owned by the logged-in account.
+fn parse_playlist(item: &Value, owner_filter: Option<&str>) -> Option<PlaylistDto> {
+    let id = item.get("id")?.as_str()?.to_string();
+    let owner_id = item
+        .pointer("/owner/id")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if owner_filter.is_some_and(|owner| owner != owner_id) {
+        return None;
+    }
+    let name = item
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let track_count = item
+        .pointer("/tracks/total")
+        .and_then(Value::as_u64)
+        .unwrap_or(0) as u32;
+    let owner = item
+        .pointer("/owner/display_name")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(owner_id)
+        .to_string();
+    Some(PlaylistDto {
+        id,
+        name,
+        track_count,
+        owner,
+    })
 }
 
 pub fn parse_search(body: &Value) -> Vec<TrackDto> {
@@ -326,6 +432,34 @@ fn pick_image(images: &[Value], target: u32) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::spotify::token::{TokenManager, Tokens};
+    use crate::state::Secret;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn api(server: &MockServer) -> (SpotifyApi, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tokens.json");
+        let tokens = Tokens {
+            access_token: Secret::new("test-token"),
+            refresh_token: Secret::new("refresh"),
+            expires_at: chrono::Utc::now().timestamp() + 3600,
+        };
+        std::fs::write(&path, serde_json::to_vec(&tokens).unwrap()).unwrap();
+        let manager = TokenManager::new(
+            path,
+            reqwest::Client::new(),
+            "client-id".to_string(),
+            format!("{}/api/token", server.uri()),
+        );
+        let api = SpotifyApi::new(
+            reqwest::Client::new(),
+            manager,
+            server.uri(),
+            Arc::new(AtomicBool::new(true)),
+        );
+        (api, dir)
+    }
 
     #[test]
     fn parses_search_results_and_images() {
@@ -374,5 +508,64 @@ mod tests {
         assert!(is_degradable(&AppError::offline("x")));
         assert!(is_degradable(&AppError::quota("x")));
         assert!(!is_degradable(&AppError::internal("x")));
+    }
+
+    #[tokio::test]
+    async fn lists_only_playlists_owned_by_the_account() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1/me"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": "me" })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/me/playlists"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "items": [
+                    {
+                        "id": "mine",
+                        "name": "Baby Shower",
+                        "owner": { "id": "me", "display_name": "Ada" },
+                        "tracks": { "total": 7 }
+                    },
+                    {
+                        "id": "theirs",
+                        "name": "Someone Else",
+                        "owner": { "id": "other" },
+                        "tracks": { "total": 3 }
+                    }
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let (api, _dir) = api(&server);
+        let playlists = api.list_playlists().await.unwrap();
+        assert_eq!(playlists.len(), 1);
+        assert_eq!(playlists[0].id, "mine");
+        assert_eq!(playlists[0].name, "Baby Shower");
+        assert_eq!(playlists[0].owner, "Ada");
+        assert_eq!(playlists[0].track_count, 7);
+    }
+
+    #[tokio::test]
+    async fn creates_a_playlist_and_returns_it() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/me/playlists"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+                "id": "new-playlist",
+                "name": "Ada's Baby Shower",
+                "owner": { "id": "me", "display_name": "Ada" },
+                "tracks": { "total": 0 }
+            })))
+            .mount(&server)
+            .await;
+
+        let (api, _dir) = api(&server);
+        let playlist = api.create_playlist("Ada's Baby Shower").await.unwrap();
+        assert_eq!(playlist.id, "new-playlist");
+        assert_eq!(playlist.name, "Ada's Baby Shower");
+        assert_eq!(playlist.track_count, 0);
     }
 }

@@ -76,6 +76,8 @@ pub fn run() {
             commands::admin_status,
             commands::auth_start,
             commands::auth_logout,
+            commands::list_spotify_playlists,
+            commands::create_spotify_playlist,
             commands::get_public_config,
             commands::get_config,
             commands::set_config,

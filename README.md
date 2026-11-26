@@ -172,9 +172,9 @@ build on Intel.
 ## Spotify setup
 
 1. In the Spotify Developer Dashboard, create an app and add the redirect URI above.
-2. Start the kiosk, open admin (`Ctrl + Option + Shift + K`), and set the **Spotify client id** and **playlist URL**.
-3. Save settings, then click **Login / relogin**. The browser opens; the kiosk temporarily leaves kiosk mode for the login.
-4. The playlist owner must match the logged-in account. The owner check runs when settings are saved.
+2. Start the kiosk, open admin (`Ctrl + Option + Shift + K`), and set the **Spotify client id**, then **Save**.
+3. Click **Login / relogin**. The browser opens; the kiosk temporarily leaves kiosk mode for the login.
+4. Under **Playlist**, pick one of your playlists or create a new one by name, then **Save**. The playlist owner must match the logged-in account. The owner check runs when settings are saved.
 
 Without a valid login, search returns no results and the guest flow falls back to manual song/artist entry. Those selections are journaled, printed, and added to the playlist once login returns.
 
@@ -185,7 +185,7 @@ Open with `Ctrl + Option + Shift + K`.
 The overlay is split into six sections:
 
 - **Overview** — what needs attention, paper/ink progress, refill actions, and a test print.
-- **Spotify** — connection, client id, playlist URL with a parsed playlist id preview, market and iTunes country.
+- **Spotify** — connection, client id, choose one of your playlists or create a new one, market and iTunes country.
 - **Printer** — backend badge, queue selection, default orientation, status/reason, and a test print.
 - **Event** — baby name and welcome line with a live Name-screen preview.
 - **Security** — change PIN, maintenance mode, and the kiosk exit danger zone.

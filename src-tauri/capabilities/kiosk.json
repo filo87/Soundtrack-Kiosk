@@ -20,6 +20,8 @@
     "allow-admin-status",
     "allow-auth-start",
     "allow-auth-logout",
+    "allow-list-spotify-playlists",
+    "allow-create-spotify-playlist",
     "allow-get-public-config",
     "allow-get-config",
     "allow-set-config",

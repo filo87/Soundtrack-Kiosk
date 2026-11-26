@@ -10,7 +10,7 @@ use crate::health::{self, Health};
 use crate::journal::{JournalLine, PrintState, Selection};
 use crate::print::{self, PrintOutcome, PrinterList};
 use crate::render::{self, PreviewPaths, PrintLayout};
-use crate::spotify::api::{SearchResponse, TrackDto};
+use crate::spotify::api::{PlaylistDto, SearchResponse, TrackDto};
 use crate::spotify::auth::{self, LoginEndpoints};
 use crate::spotify::AUTHORIZE_URL;
 use crate::state::{AppState, Prepared};
@@ -492,6 +492,36 @@ pub async fn auth_start(state: State<'_, AppState>) -> AppResult<()> {
 pub async fn auth_logout(state: State<'_, AppState>) -> AppResult<()> {
     state.require_admin()?;
     state.tokens.logout().await
+}
+
+#[tauri::command]
+pub async fn list_spotify_playlists(state: State<'_, AppState>) -> AppResult<Vec<PlaylistDto>> {
+    state.require_admin()?;
+    if !state.tokens.is_authenticated() {
+        return Err(AppError::auth_required("Connect Spotify first."));
+    }
+    state.api().list_playlists().await
+}
+
+#[tauri::command]
+pub async fn create_spotify_playlist(
+    state: State<'_, AppState>,
+    name: String,
+) -> AppResult<PlaylistDto> {
+    state.require_admin()?;
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(AppError::invalid_input("Give the new playlist a name."));
+    }
+    if name.chars().count() > 100 {
+        return Err(AppError::invalid_input(
+            "Playlist names are limited to 100 characters.",
+        ));
+    }
+    if !state.tokens.is_authenticated() {
+        return Err(AppError::auth_required("Connect Spotify first."));
+    }
+    state.api().create_playlist(name).await
 }
 
 #[tauri::command]

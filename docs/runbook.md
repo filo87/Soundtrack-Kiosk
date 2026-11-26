@@ -34,6 +34,8 @@
 - Open **Spotify** and press **Login / relogin**; the browser opens and the kiosk temporarily
   leaves kiosk mode.
 - Finish the Spotify login in the browser; the kiosk restores itself.
+- Under **Playlist**, pick one of your playlists from the list, or type a name and press
+  **Create playlist**. Then press **Save** to apply. The card shows the current playlist id.
 - The **Redirect URI** card shows the exact value for the Spotify app with a **Copy** button.
 - When auth is lost the dot turns salmon and guests can still type songs manually; those entries
   are journaled and added to the playlist when login returns.
